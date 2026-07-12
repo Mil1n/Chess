@@ -2,8 +2,8 @@
 
 > **Chess Prime** — прототип онлайн-шахмат нового поколения: быстрые партии, понятный fair play, персональный тренер, клубы и мягкий вход для новичков.
 
-![React](https://img.shields.io/badge/React-UI-61DAFB?style=for-the-badge&logo=react&logoColor=111)
-![Vite](https://img.shields.io/badge/Vite-Build-646CFF?style=for-the-badge&logo=vite&logoColor=fff)
+![Vanilla JS](https://img.shields.io/badge/Vanilla_JS-UI-F7DF1E?style=for-the-badge&logo=javascript&logoColor=111)
+![Static](https://img.shields.io/badge/Static-Direct_Index-74f6c7?style=for-the-badge)
 ![Status](https://img.shields.io/badge/Status-MVP-74f6c7?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-Private-lightgrey?style=for-the-badge)
 
@@ -34,8 +34,8 @@
 
 ### Требования
 
-- Node.js 20+ желательно
-- npm 10+ желательно
+- Любой современный браузер для открытия `index.html` напрямую
+- Node.js/npm нужны только для npm-скриптов `start`, `build` и `preview`
 
 ### Установка
 
@@ -49,7 +49,7 @@ npm install
 npm start
 ```
 
-После запуска откройте адрес, который покажет Vite, обычно:
+После запуска откройте адрес локального сервера:
 
 ```text
 http://localhost:5173
@@ -74,18 +74,18 @@ npm run preview
 ├── docs/
 │   └── online-chess-product-plan.md  # конкурентный анализ, стратегия и roadmap
 ├── src/
-│   ├── main.jsx                      # React-приложение и шахматная логика MVP
+│   ├── main.js                       # vanilla JS-приложение и шахматная логика MVP
 │   └── styles.css                    # визуальный стиль и адаптивность
-├── index.html                        # HTML entrypoint для Vite
+├── index.html                        # самодостаточный HTML entrypoint
 ├── package.json                      # npm scripts и зависимости
 └── README.md
 ```
 
 ## 🧠 Архитектура MVP
 
-Сейчас приложение полностью клиентское:
+Сейчас приложение полностью клиентское и может открываться напрямую через `index.html` без React-сборки:
 
-1. `src/main.jsx` хранит состояние доски, выбранную фигуру, сторону хода, историю ходов и статус жалобы.
+1. `src/main.js` хранит состояние доски, выбранную фигуру, сторону хода, историю ходов и статус жалобы.
 2. `generateMoves` строит псевдолегальные ходы для базовых фигур без проверки шаха/мата и рокировки.
 3. `makeMove` применяет ход и делает автоматическое превращение пешки в ферзя на последней горизонтали.
 4. `evaluate` считает простой материальный баланс для панели тренера.
