@@ -15,7 +15,7 @@
           <h1>Онлайн-шахматы с честной игрой, обучением и клубами</h1>
           <p class="lead">Первый рабочий прототип превращает стратегию в продукт: доска с легальными ходами, история партии, тренерские подсказки, fair play workflow и план развития комьюнити.</p>
           <div class="hero-actions">
-            <button id="reset-game" type="button">Новая партия</button>
+            <button id="new-online-game" type="button">Найти онлайн соперника</button>
             <a href="#roadmap">Открыть стратегию</a>
           </div>
         </div>
@@ -29,6 +29,13 @@
       <section class="game-layout">
         <div id="board" class="board" aria-label="Шахматная доска"></div>
         <aside class="side-panel">
+          <section class="card online-card">
+            <div class="section-eyebrow">Online</div>
+            <h2>Матчмейкинг</h2>
+            <p id="online-status" class="online-status">Нажмите «Найти онлайн соперника», чтобы начать новую партию.</p>
+            <div class="player-row"><span>Вы</span><strong>Guest_1200</strong></div>
+            <div class="player-row"><span>Соперник</span><strong id="opponent-name">ожидает поиска</strong></div>
+          </section>
           <section class="card">
             <div class="section-eyebrow">Live Game</div>
             <h2>История ходов</h2>

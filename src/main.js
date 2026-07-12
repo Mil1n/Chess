@@ -20,6 +20,9 @@ const state = {
   turn: 'white',
   selected: null,
   history: [],
+  gameId: 0,
+  onlineStatus: 'idle',
+  opponent: 'ожидает поиска',
 };
 
 const boardEl = document.querySelector('#board');
@@ -28,6 +31,11 @@ const scoreEl = document.querySelector('#score');
 const lastMoveEl = document.querySelector('#last-move');
 const coachAdviceEl = document.querySelector('#coach-advice');
 const reportStatusEl = document.querySelector('#report-status');
+const onlineStatusEl = document.querySelector('#online-status');
+const opponentNameEl = document.querySelector('#opponent-name');
+const newOnlineGameButton = document.querySelector('#new-online-game');
+const demoOpponents = ['Mila_1540', 'KnightFox', 'TacticNinja', 'ClubPlayer_1280'];
+let matchmakingTimer = null;
 
 function inBounds(r, c) {
   return r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -200,20 +208,60 @@ function renderCoach() {
       : 'Позиция примерно равная: улучшайте худшую фигуру и контролируйте центр.';
 }
 
+function renderOnlineStatus() {
+  opponentNameEl.textContent = state.opponent;
+  newOnlineGameButton.textContent = state.onlineStatus === 'searching' ? 'Ищем соперника…' : 'Новая онлайн партия';
+  newOnlineGameButton.disabled = state.onlineStatus === 'searching';
+
+  if (state.onlineStatus === 'connected') {
+    onlineStatusEl.textContent = `Партия #${state.gameId} запущена. Соперник найден, играйте ходами на доске.`;
+    onlineStatusEl.className = 'online-status connected';
+    return;
+  }
+
+  if (state.onlineStatus === 'searching') {
+    onlineStatusEl.textContent = 'Подбираем соперника по рейтингу и уровню доверия…';
+    onlineStatusEl.className = 'online-status searching';
+    return;
+  }
+
+  onlineStatusEl.textContent = 'Нажмите «Найти онлайн соперника», чтобы начать новую партию.';
+  onlineStatusEl.className = 'online-status';
+}
+
 function render() {
   renderBoard();
   renderMoves();
   renderCoach();
+  renderOnlineStatus();
 }
 
-document.querySelector('#reset-game').addEventListener('click', () => {
+function resetBoardForNewGame() {
   state.board = cloneBoard(initialBoard);
   state.turn = 'white';
   state.selected = null;
   state.history = [];
   reportStatusEl.textContent = 'Нет активных жалоб';
+}
+
+function startOnlineGame() {
+  clearTimeout(matchmakingTimer);
+  resetBoardForNewGame();
+  state.gameId += 1;
+  state.onlineStatus = 'searching';
+  state.opponent = 'поиск…';
   render();
-});
+
+  matchmakingTimer = setTimeout(() => {
+    const opponentIndex = state.gameId % demoOpponents.length;
+    state.onlineStatus = 'connected';
+    state.opponent = demoOpponents[opponentIndex];
+    state.history = [`Онлайн партия #${state.gameId} началась против ${state.opponent}`];
+    render();
+  }, 700);
+}
+
+newOnlineGameButton.addEventListener('click', startOnlineGame);
 
 document.querySelector('#report-game').addEventListener('click', () => {
   reportStatusEl.textContent = 'Жалоба получена → проверяется модерацией';
