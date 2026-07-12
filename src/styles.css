@@ -30,7 +30,7 @@ button, .hero-actions a { border: 0; border-radius: 999px; background: #74f6c7; 
 .square.selected { outline: 5px solid #74f6c7; outline-offset: -5px; }
 .square.legal i { width: 30%; height: 30%; position: absolute; border-radius: 999px; background: rgba(116,246,199,.72); }
 .square span { display: block; line-height: 1; filter: drop-shadow(0 3px 2px rgba(0,0,0,.25)); z-index: 1; }
-.white-piece { color: #fff8dc; text-shadow: 0 2px 0 rgba(0,0,0,.55); }
+.white-piece { color: #ffffff; text-shadow: none; }
 .black-piece { color: #071018; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
 .turn-badge { position: absolute; left: 16px; top: 16px; border-radius: 999px; padding: 8px 12px; background: rgba(13,17,23,.78); font-weight: 800; color: #fff; pointer-events: none; }
 .side-panel, .feature-grid { display: grid; gap: 16px; }

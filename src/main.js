@@ -25,6 +25,7 @@ const state = {
   mode: 'idle',
   opponent: 'ожидает выбора',
   botThinking: false,
+  soundEnabled: true,
 };
 
 const boardEl = document.querySelector('#board');
@@ -37,10 +38,59 @@ const onlineStatusEl = document.querySelector('#online-status');
 const opponentNameEl = document.querySelector('#opponent-name');
 const newOnlineGameButton = document.querySelector('#new-online-game');
 const newBotGameButton = document.querySelector('#new-bot-game');
+const toggleSoundButton = document.querySelector('#toggle-sound');
 const demoOpponents = ['Mila_1540', 'KnightFox', 'TacticNinja', 'ClubPlayer_1280'];
 const botProfiles = ['Bot Nova 900', 'Bot Tactic 1200', 'Bot Aurora 1500'];
 let matchmakingTimer = null;
 let botTimer = null;
+let audioContext = null;
+
+
+function getAudioContext() {
+  if (!state.soundEnabled) return null;
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return null;
+  if (!audioContext) audioContext = new AudioContextClass();
+  if (audioContext.state === 'suspended') audioContext.resume();
+  return audioContext;
+}
+
+function playTone({ frequency, duration = 0.08, type = 'sine', volume = 0.08, delay = 0 }) {
+  const context = getAudioContext();
+  if (!context) return;
+
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const start = context.currentTime + delay;
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, start);
+  gain.gain.setValueAtTime(0.0001, start);
+  gain.gain.exponentialRampToValueAtTime(volume, start + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+  oscillator.connect(gain).connect(context.destination);
+  oscillator.start(start);
+  oscillator.stop(start + duration + 0.02);
+}
+
+function playSound(kind) {
+  const sounds = {
+    move: [{ frequency: 520, duration: 0.055, type: 'triangle' }],
+    capture: [
+      { frequency: 220, duration: 0.07, type: 'square', volume: 0.06 },
+      { frequency: 150, duration: 0.08, type: 'sawtooth', volume: 0.04, delay: 0.045 },
+    ],
+    start: [
+      { frequency: 440, duration: 0.07, type: 'triangle' },
+      { frequency: 660, duration: 0.08, type: 'triangle', delay: 0.07 },
+    ],
+    bot: [
+      { frequency: 330, duration: 0.05, type: 'triangle' },
+      { frequency: 500, duration: 0.05, type: 'triangle', delay: 0.055 },
+    ],
+    report: [{ frequency: 180, duration: 0.16, type: 'sawtooth', volume: 0.04 }],
+  };
+  (sounds[kind] ?? sounds.move).forEach(playTone);
+}
 
 function inBounds(r, c) {
   return r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -155,10 +205,12 @@ function handleSquareClick(r, c) {
 
   if (state.selected && legalTarget) {
     const movingPiece = state.board[state.selected[0]][state.selected[1]];
+    const capturedPiece = state.board[r][c];
     state.board = makeMove(state.board, state.selected, [r, c]);
     state.history = [`${pieces[movingPiece]} ${squareName(state.selected[0], state.selected[1])} → ${squareName(r, c)}`, ...state.history].slice(0, 8);
     state.turn = state.turn === 'white' ? 'black' : 'white';
     state.selected = null;
+    playSound(capturedPiece ? 'capture' : 'move');
     render();
     queueBotMoveIfNeeded();
     return;
@@ -223,6 +275,7 @@ function renderOnlineStatus() {
   newOnlineGameButton.textContent = state.onlineStatus === 'searching' ? 'Ищем соперника…' : 'Новая онлайн партия';
   newOnlineGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
   newBotGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
+  toggleSoundButton.textContent = state.soundEnabled ? 'Звук: вкл' : 'Звук: выкл';
 
   if (state.mode === 'bot') {
     onlineStatusEl.textContent = state.botThinking
@@ -272,6 +325,7 @@ function startOnlineGame() {
   state.onlineStatus = 'searching';
   state.mode = 'online';
   state.opponent = 'поиск…';
+  playSound('move');
   render();
 
   matchmakingTimer = setTimeout(() => {
@@ -279,6 +333,7 @@ function startOnlineGame() {
     state.onlineStatus = 'connected';
     state.opponent = demoOpponents[opponentIndex];
     state.history = [`Онлайн партия #${state.gameId} началась против ${state.opponent}`];
+    playSound('start');
     render();
   }, 700);
 }
@@ -322,10 +377,12 @@ function queueBotMoveIfNeeded() {
     }
 
     const movingPiece = state.board[botMove.from[0]][botMove.from[1]];
+    const capturedPiece = state.board[botMove.to[0]][botMove.to[1]];
     state.board = makeMove(state.board, botMove.from, botMove.to);
     state.history = [`${state.opponent}: ${pieces[movingPiece]} ${squareName(botMove.from[0], botMove.from[1])} → ${squareName(botMove.to[0], botMove.to[1])}`, ...state.history].slice(0, 8);
     state.turn = 'white';
     state.botThinking = false;
+    playSound(capturedPiece ? 'capture' : 'bot');
     render();
   }, 650);
 }
@@ -339,14 +396,21 @@ function startBotGame() {
   state.onlineStatus = 'connected';
   state.opponent = botProfiles[state.gameId % botProfiles.length];
   state.history = [`Офлайн партия #${state.gameId} началась против ${state.opponent}`];
+  playSound('start');
   render();
 }
 
 newOnlineGameButton.addEventListener('click', startOnlineGame);
 newBotGameButton.addEventListener('click', startBotGame);
+toggleSoundButton.addEventListener('click', () => {
+  state.soundEnabled = !state.soundEnabled;
+  if (state.soundEnabled) playSound('move');
+  render();
+});
 
 document.querySelector('#report-game').addEventListener('click', () => {
   reportStatusEl.textContent = 'Жалоба получена → проверяется модерацией';
+  playSound('report');
 });
 
 render();
