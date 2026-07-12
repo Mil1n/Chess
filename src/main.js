@@ -26,6 +26,8 @@ const state = {
   opponent: 'ожидает выбора',
   botThinking: false,
   soundEnabled: true,
+  gameOver: false,
+  result: '',
 };
 
 const boardEl = document.querySelector('#board');
@@ -112,7 +114,7 @@ function squareName(r, c) {
   return `${files[c]}${8 - r}`;
 }
 
-function generateMoves(board, r, c) {
+function generatePseudoMoves(board, r, c, { attacksOnly = false } = {}) {
   const piece = board[r][c];
   if (!piece) return [];
 
@@ -133,14 +135,15 @@ function generateMoves(board, r, c) {
   if (lower === 'p') {
     const dir = color === 'white' ? -1 : 1;
     const start = color === 'white' ? 6 : 1;
-    if (inBounds(r + dir, c) && !board[r + dir][c]) {
+    if (!attacksOnly && inBounds(r + dir, c) && !board[r + dir][c]) {
       moves.push([r + dir, c]);
       if (r === start && !board[r + dir * 2][c]) moves.push([r + dir * 2, c]);
     }
     [-1, 1].forEach((dc) => {
       const nr = r + dir;
       const nc = c + dc;
-      if (inBounds(nr, nc) && board[nr][nc] && colorOf(board[nr][nc]) !== color) moves.push([nr, nc]);
+      if (!inBounds(nr, nc)) return;
+      if (attacksOnly || (board[nr][nc] && colorOf(board[nr][nc]) !== color)) moves.push([nr, nc]);
     });
   }
 
@@ -173,6 +176,78 @@ function generateMoves(board, r, c) {
   return moves;
 }
 
+function findKing(board, color) {
+  const king = color === 'white' ? 'K' : 'k';
+  for (let r = 0; r < 8; r += 1) {
+    for (let c = 0; c < 8; c += 1) {
+      if (board[r][c] === king) return [r, c];
+    }
+  }
+  return null;
+}
+
+function isSquareAttacked(board, row, col, byColor) {
+  for (let r = 0; r < 8; r += 1) {
+    for (let c = 0; c < 8; c += 1) {
+      const piece = board[r][c];
+      if (piece && colorOf(piece) === byColor) {
+        if (generatePseudoMoves(board, r, c, { attacksOnly: true }).some(([mr, mc]) => mr === row && mc === col)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isKingInCheck(board, color) {
+  const king = findKing(board, color);
+  if (!king) return true;
+  const opponent = color === 'white' ? 'black' : 'white';
+  return isSquareAttacked(board, king[0], king[1], opponent);
+}
+
+function generateMoves(board, r, c) {
+  const piece = board[r][c];
+  if (!piece) return [];
+  const color = colorOf(piece);
+  return generatePseudoMoves(board, r, c).filter(([nr, nc]) => {
+    const target = board[nr][nc];
+    if (target?.toLowerCase() === 'k') return false;
+    return !isKingInCheck(makeMove(board, [r, c], [nr, nc]), color);
+  });
+}
+
+function collectLegalMovesForColor(board, color) {
+  const moves = [];
+  board.forEach((row, r) => {
+    row.forEach((piece, c) => {
+      if (piece && colorOf(piece) === color) {
+        generateMoves(board, r, c).forEach(([tr, tc]) => {
+          moves.push({ from: [r, c], to: [tr, tc], capture: Boolean(board[tr][tc]) });
+        });
+      }
+    });
+  });
+  return moves;
+}
+
+function updateGameEndState() {
+  const legalMoves = collectLegalMovesForColor(state.board, state.turn);
+  const inCheck = isKingInCheck(state.board, state.turn);
+  state.gameOver = legalMoves.length === 0;
+
+  if (!state.gameOver) {
+    state.result = inCheck ? `Шах: ${state.turn === 'white' ? 'белому' : 'черному'} королю.` : '';
+    return;
+  }
+
+  if (inCheck) {
+    const winner = state.turn === 'white' ? 'черные' : 'белые';
+    state.result = `Мат. Победили ${winner}.`;
+  } else {
+    state.result = 'Пат. Ничья.';
+  }
+}
+
 function makeMove(board, from, to) {
   const next = cloneBoard(board);
   const piece = next[from[0]][from[1]];
@@ -197,7 +272,7 @@ function isSameSquare(a, b) {
 }
 
 function handleSquareClick(r, c) {
-  if (state.botThinking) return;
+  if (state.botThinking || state.gameOver) return;
 
   const piece = state.board[r][c];
   const legalMoves = state.selected ? generateMoves(state.board, state.selected[0], state.selected[1]) : [];
@@ -210,6 +285,7 @@ function handleSquareClick(r, c) {
     state.history = [`${pieces[movingPiece]} ${squareName(state.selected[0], state.selected[1])} → ${squareName(r, c)}`, ...state.history].slice(0, 8);
     state.turn = state.turn === 'white' ? 'black' : 'white';
     state.selected = null;
+    updateGameEndState();
     playSound(capturedPiece ? 'capture' : 'move');
     render();
     queueBotMoveIfNeeded();
@@ -222,7 +298,7 @@ function handleSquareClick(r, c) {
 }
 
 function renderBoard() {
-  const legalMoves = state.selected ? generateMoves(state.board, state.selected[0], state.selected[1]) : [];
+  const legalMoves = state.selected && !state.gameOver ? generateMoves(state.board, state.selected[0], state.selected[1]) : [];
   boardEl.replaceChildren();
 
   state.board.forEach((row, r) => {
@@ -245,7 +321,7 @@ function renderBoard() {
 
   const badge = document.createElement('div');
   badge.className = 'turn-badge';
-  badge.textContent = `Ход: ${state.turn === 'white' ? 'белые' : 'черные'}`;
+  badge.textContent = state.gameOver ? state.result : (state.result || `Ход: ${state.turn === 'white' ? 'белые' : 'черные'}`);
   boardEl.append(badge);
 }
 
@@ -276,6 +352,12 @@ function renderOnlineStatus() {
   newOnlineGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
   newBotGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
   toggleSoundButton.textContent = state.soundEnabled ? 'Звук: вкл' : 'Звук: выкл';
+
+  if (state.gameOver) {
+    onlineStatusEl.textContent = state.result;
+    onlineStatusEl.className = 'online-status finished';
+    return;
+  }
 
   if (state.mode === 'bot') {
     onlineStatusEl.textContent = state.botThinking
@@ -314,6 +396,8 @@ function resetBoardForNewGame() {
   state.selected = null;
   state.history = [];
   state.botThinking = false;
+  state.gameOver = false;
+  state.result = '';
   reportStatusEl.textContent = 'Нет активных жалоб';
 }
 
@@ -338,22 +422,8 @@ function startOnlineGame() {
   }, 700);
 }
 
-function collectMovesForColor(color) {
-  const moves = [];
-  state.board.forEach((row, r) => {
-    row.forEach((piece, c) => {
-      if (piece && colorOf(piece) === color) {
-        generateMoves(state.board, r, c).forEach(([tr, tc]) => {
-          moves.push({ from: [r, c], to: [tr, tc], capture: Boolean(state.board[tr][tc]) });
-        });
-      }
-    });
-  });
-  return moves;
-}
-
 function chooseBotMove() {
-  const moves = collectMovesForColor('black');
+  const moves = collectLegalMovesForColor(state.board, 'black');
   if (!moves.length) return null;
   const captures = moves.filter((move) => move.capture);
   const pool = captures.length ? captures : moves;
@@ -362,7 +432,7 @@ function chooseBotMove() {
 
 function queueBotMoveIfNeeded() {
   clearTimeout(botTimer);
-  if (state.mode !== 'bot' || state.turn !== 'black') return;
+  if (state.mode !== 'bot' || state.turn !== 'black' || state.gameOver) return;
 
   state.botThinking = true;
   render();
@@ -372,6 +442,8 @@ function queueBotMoveIfNeeded() {
     if (!botMove) {
       state.history = [`${state.opponent} не нашел легальных ходов`, ...state.history].slice(0, 8);
       state.botThinking = false;
+      state.gameOver = true;
+      state.result = 'Пат. Ничья.';
       render();
       return;
     }
@@ -382,6 +454,7 @@ function queueBotMoveIfNeeded() {
     state.history = [`${state.opponent}: ${pieces[movingPiece]} ${squareName(botMove.from[0], botMove.from[1])} → ${squareName(botMove.to[0], botMove.to[1])}`, ...state.history].slice(0, 8);
     state.turn = 'white';
     state.botThinking = false;
+    updateGameEndState();
     playSound(capturedPiece ? 'capture' : 'bot');
     render();
   }, 650);
@@ -397,6 +470,7 @@ function startBotGame() {
   state.opponent = botProfiles[state.gameId % botProfiles.length];
   state.history = [`Офлайн партия #${state.gameId} началась против ${state.opponent}`];
   playSound('start');
+  updateGameEndState();
   render();
 }
 
