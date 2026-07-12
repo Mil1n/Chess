@@ -22,7 +22,9 @@ const state = {
   history: [],
   gameId: 0,
   onlineStatus: 'idle',
-  opponent: 'ожидает поиска',
+  mode: 'idle',
+  opponent: 'ожидает выбора',
+  botThinking: false,
 };
 
 const boardEl = document.querySelector('#board');
@@ -34,8 +36,11 @@ const reportStatusEl = document.querySelector('#report-status');
 const onlineStatusEl = document.querySelector('#online-status');
 const opponentNameEl = document.querySelector('#opponent-name');
 const newOnlineGameButton = document.querySelector('#new-online-game');
+const newBotGameButton = document.querySelector('#new-bot-game');
 const demoOpponents = ['Mila_1540', 'KnightFox', 'TacticNinja', 'ClubPlayer_1280'];
+const botProfiles = ['Bot Nova 900', 'Bot Tactic 1200', 'Bot Aurora 1500'];
 let matchmakingTimer = null;
+let botTimer = null;
 
 function inBounds(r, c) {
   return r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -142,6 +147,8 @@ function isSameSquare(a, b) {
 }
 
 function handleSquareClick(r, c) {
+  if (state.botThinking) return;
+
   const piece = state.board[r][c];
   const legalMoves = state.selected ? generateMoves(state.board, state.selected[0], state.selected[1]) : [];
   const legalTarget = legalMoves.some(([mr, mc]) => mr === r && mc === c);
@@ -153,10 +160,12 @@ function handleSquareClick(r, c) {
     state.turn = state.turn === 'white' ? 'black' : 'white';
     state.selected = null;
     render();
+    queueBotMoveIfNeeded();
     return;
   }
 
-  state.selected = piece && colorOf(piece) === state.turn ? [r, c] : null;
+  const canSelectPiece = piece && colorOf(piece) === state.turn && !(state.mode === 'bot' && state.turn === 'black');
+  state.selected = canSelectPiece ? [r, c] : null;
   render();
 }
 
@@ -211,7 +220,16 @@ function renderCoach() {
 function renderOnlineStatus() {
   opponentNameEl.textContent = state.opponent;
   newOnlineGameButton.textContent = state.onlineStatus === 'searching' ? 'Ищем соперника…' : 'Новая онлайн партия';
-  newOnlineGameButton.disabled = state.onlineStatus === 'searching';
+  newOnlineGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
+  newBotGameButton.disabled = state.onlineStatus === 'searching' || state.botThinking;
+
+  if (state.mode === 'bot') {
+    onlineStatusEl.textContent = state.botThinking
+      ? `${state.opponent} думает над ответом…`
+      : `Офлайн партия #${state.gameId} против ${state.opponent}. Вы играете белыми.`;
+    onlineStatusEl.className = state.botThinking ? 'online-status searching' : 'online-status connected';
+    return;
+  }
 
   if (state.onlineStatus === 'connected') {
     onlineStatusEl.textContent = `Партия #${state.gameId} запущена. Соперник найден, играйте ходами на доске.`;
@@ -225,7 +243,7 @@ function renderOnlineStatus() {
     return;
   }
 
-  onlineStatusEl.textContent = 'Нажмите «Найти онлайн соперника», чтобы начать новую партию.';
+  onlineStatusEl.textContent = 'Выберите онлайн-поиск или офлайн-бота, чтобы начать новую партию.';
   onlineStatusEl.className = 'online-status';
 }
 
@@ -241,14 +259,17 @@ function resetBoardForNewGame() {
   state.turn = 'white';
   state.selected = null;
   state.history = [];
+  state.botThinking = false;
   reportStatusEl.textContent = 'Нет активных жалоб';
 }
 
 function startOnlineGame() {
   clearTimeout(matchmakingTimer);
+  clearTimeout(botTimer);
   resetBoardForNewGame();
   state.gameId += 1;
   state.onlineStatus = 'searching';
+  state.mode = 'online';
   state.opponent = 'поиск…';
   render();
 
@@ -261,7 +282,67 @@ function startOnlineGame() {
   }, 700);
 }
 
+function collectMovesForColor(color) {
+  const moves = [];
+  state.board.forEach((row, r) => {
+    row.forEach((piece, c) => {
+      if (piece && colorOf(piece) === color) {
+        generateMoves(state.board, r, c).forEach(([tr, tc]) => {
+          moves.push({ from: [r, c], to: [tr, tc], capture: Boolean(state.board[tr][tc]) });
+        });
+      }
+    });
+  });
+  return moves;
+}
+
+function chooseBotMove() {
+  const moves = collectMovesForColor('black');
+  if (!moves.length) return null;
+  const captures = moves.filter((move) => move.capture);
+  const pool = captures.length ? captures : moves;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+function queueBotMoveIfNeeded() {
+  clearTimeout(botTimer);
+  if (state.mode !== 'bot' || state.turn !== 'black') return;
+
+  state.botThinking = true;
+  render();
+
+  botTimer = setTimeout(() => {
+    const botMove = chooseBotMove();
+    if (!botMove) {
+      state.history = [`${state.opponent} не нашел легальных ходов`, ...state.history].slice(0, 8);
+      state.botThinking = false;
+      render();
+      return;
+    }
+
+    const movingPiece = state.board[botMove.from[0]][botMove.from[1]];
+    state.board = makeMove(state.board, botMove.from, botMove.to);
+    state.history = [`${state.opponent}: ${pieces[movingPiece]} ${squareName(botMove.from[0], botMove.from[1])} → ${squareName(botMove.to[0], botMove.to[1])}`, ...state.history].slice(0, 8);
+    state.turn = 'white';
+    state.botThinking = false;
+    render();
+  }, 650);
+}
+
+function startBotGame() {
+  clearTimeout(matchmakingTimer);
+  clearTimeout(botTimer);
+  resetBoardForNewGame();
+  state.gameId += 1;
+  state.mode = 'bot';
+  state.onlineStatus = 'connected';
+  state.opponent = botProfiles[state.gameId % botProfiles.length];
+  state.history = [`Офлайн партия #${state.gameId} началась против ${state.opponent}`];
+  render();
+}
+
 newOnlineGameButton.addEventListener('click', startOnlineGame);
+newBotGameButton.addEventListener('click', startBotGame);
 
 document.querySelector('#report-game').addEventListener('click', () => {
   reportStatusEl.textContent = 'Жалоба получена → проверяется модерацией';

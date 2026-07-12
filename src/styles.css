@@ -50,3 +50,4 @@ button, .hero-actions a { border: 0; border-radius: 999px; background: #74f6c7; 
 .player-row { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.1); color: #c7d2e4; }
 .player-row strong { color: #fff; }
 button:disabled { cursor: wait; opacity: .7; }
+.hero-actions .secondary { background: rgba(116,246,199,.12); color: #74f6c7; border: 1px solid rgba(116,246,199,.3); }
