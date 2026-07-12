@@ -23,13 +23,15 @@ button, .hero-actions a { border: 0; border-radius: 999px; background: #74f6c7; 
 .stats span { display: block; padding: 18px; border-radius: 20px; background: rgba(255,255,255,.06); color: #c7d2e4; }
 .stats strong { display: block; color: #fff; font-size: 1.4rem; }
 .game-layout { display: grid; grid-template-columns: minmax(320px, 640px) 1fr; gap: 24px; align-items: start; }
-.board { position: relative; display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; overflow: hidden; border-radius: 28px; border: 1px solid rgba(255,255,255,.18); box-shadow: 0 30px 90px rgba(0,0,0,.45); }
-.square { position: relative; border: 0; border-radius: 0; display: grid; place-items: center; padding: 0; font-size: clamp(1.9rem, 7vw, 4.4rem); color: #161b22; }
+.board { position: relative; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-template-rows: repeat(8, minmax(0, 1fr)); aspect-ratio: 1; overflow: hidden; border-radius: 28px; border: 1px solid rgba(255,255,255,.18); box-shadow: 0 30px 90px rgba(0,0,0,.45); }
+.square { position: relative; width: 100%; height: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 0; display: grid; place-items: center; padding: 0; font-size: clamp(1.7rem, 6vw, 3.8rem); line-height: 1; color: #161b22; }
 .square.light { background: #e9d8a6; }
 .square.dark { background: #936639; }
 .square.selected { outline: 5px solid #74f6c7; outline-offset: -5px; }
 .square.legal i { width: 30%; height: 30%; position: absolute; border-radius: 999px; background: rgba(116,246,199,.72); }
-.square span { filter: drop-shadow(0 3px 2px rgba(0,0,0,.25)); z-index: 1; }
+.square span { display: block; line-height: 1; filter: drop-shadow(0 3px 2px rgba(0,0,0,.25)); z-index: 1; }
+.white-piece { color: #fff8dc; text-shadow: 0 2px 0 rgba(0,0,0,.55); }
+.black-piece { color: #071018; text-shadow: 0 1px 0 rgba(255,255,255,.25); }
 .turn-badge { position: absolute; left: 16px; top: 16px; border-radius: 999px; padding: 8px 12px; background: rgba(13,17,23,.78); font-weight: 800; color: #fff; pointer-events: none; }
 .side-panel, .feature-grid { display: grid; gap: 16px; }
 .card { padding: 22px; color: #dbe7f8; }

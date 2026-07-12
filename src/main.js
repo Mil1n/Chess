@@ -183,6 +183,7 @@ function renderBoard() {
       button.addEventListener('click', () => handleSquareClick(r, c));
 
       const pieceEl = document.createElement('span');
+      pieceEl.className = piece ? `${colorOf(piece)}-piece` : '';
       pieceEl.textContent = piece ? pieces[piece] : '';
       button.append(pieceEl);
       if (legal) button.append(document.createElement('i'));
