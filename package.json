@@ -1,0 +1,13 @@
+{
+  "name": "best-online-chess",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 5173",
+    "build": "rm -rf dist && mkdir -p dist && cp index.html dist/index.html && cp -R src dist/src",
+    "preview": "python3 -m http.server 4173 --directory dist"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
