@@ -28,6 +28,11 @@ const state = {
   soundEnabled: true,
   gameOver: false,
   result: '',
+  lastMove: null,
+  enPassantTarget: null,
+  castlingRights: { whiteKingSide: true, whiteQueenSide: true, blackKingSide: true, blackQueenSide: true },
+  clock: { white: 300, black: 300 },
+  increment: 2,
 };
 
 const boardEl = document.querySelector('#board');
@@ -41,11 +46,20 @@ const opponentNameEl = document.querySelector('#opponent-name');
 const newOnlineGameButton = document.querySelector('#new-online-game');
 const newBotGameButton = document.querySelector('#new-bot-game');
 const toggleSoundButton = document.querySelector('#toggle-sound');
+const whiteClockEl = document.querySelector('#white-clock');
+const blackClockEl = document.querySelector('#black-clock');
+const resignGameButton = document.querySelector('#resign-game');
+const drawGameButton = document.querySelector('#draw-game');
+const rematchGameButton = document.querySelector('#rematch-game');
+const copyPgnButton = document.querySelector('#copy-pgn');
+const copyFenButton = document.querySelector('#copy-fen');
 const demoOpponents = ['Mila_1540', 'KnightFox', 'TacticNinja', 'ClubPlayer_1280'];
 const botProfiles = ['Bot Nova 900', 'Bot Tactic 1200', 'Bot Aurora 1500'];
 let matchmakingTimer = null;
 let botTimer = null;
 let audioContext = null;
+let clockTimer = null;
+let lastStartMode = 'bot';
 
 
 function getAudioContext() {
@@ -114,6 +128,46 @@ function squareName(r, c) {
   return `${files[c]}${8 - r}`;
 }
 
+function opposite(color) {
+  return color === 'white' ? 'black' : 'white';
+}
+
+function defaultCastlingRights() {
+  return { whiteKingSide: true, whiteQueenSide: true, blackKingSide: true, blackQueenSide: true };
+}
+
+function sameSquare(a, b) {
+  return Boolean(a && b && a[0] === b[0] && a[1] === b[1]);
+}
+
+function formatClock(seconds) {
+  const safe = Math.max(0, seconds);
+  const minutes = Math.floor(safe / 60).toString().padStart(2, '0');
+  const rest = (safe % 60).toString().padStart(2, '0');
+  return `${minutes}:${rest}`;
+}
+
+function stopClock() {
+  clearInterval(clockTimer);
+  clockTimer = null;
+}
+
+function startClock() {
+  stopClock();
+  clockTimer = setInterval(() => {
+    if (state.gameOver || state.onlineStatus === 'searching') return;
+    state.clock[state.turn] -= 1;
+    if (state.clock[state.turn] <= 0) {
+      state.clock[state.turn] = 0;
+      state.gameOver = true;
+      state.result = `Время вышло. Победили ${state.turn === 'white' ? 'черные' : 'белые'}.`;
+      stopClock();
+      playSound('report');
+    }
+    render();
+  }, 1000);
+}
+
 function generatePseudoMoves(board, r, c, { attacksOnly = false } = {}) {
   const piece = board[r][c];
   if (!piece) return [];
@@ -143,7 +197,7 @@ function generatePseudoMoves(board, r, c, { attacksOnly = false } = {}) {
       const nr = r + dir;
       const nc = c + dc;
       if (!inBounds(nr, nc)) return;
-      if (attacksOnly || (board[nr][nc] && colorOf(board[nr][nc]) !== color)) moves.push([nr, nc]);
+      if (attacksOnly || (board[nr][nc] && colorOf(board[nr][nc]) !== color) || sameSquare(state.enPassantTarget, [nr, nc])) moves.push([nr, nc]);
     });
   }
 
@@ -170,6 +224,17 @@ function generatePseudoMoves(board, r, c, { attacksOnly = false } = {}) {
       for (let dc = -1; dc <= 1; dc += 1) {
         if (dr || dc) add(r + dr, c + dc);
       }
+    }
+
+    if (!attacksOnly && !isKingInCheck(board, color)) {
+      const homeRow = color === 'white' ? 7 : 0;
+      const enemy = opposite(color);
+      const kingSideRight = color === 'white' ? state.castlingRights.whiteKingSide : state.castlingRights.blackKingSide;
+      const queenSideRight = color === 'white' ? state.castlingRights.whiteQueenSide : state.castlingRights.blackQueenSide;
+      if (r === homeRow && c === 4 && kingSideRight && !board[homeRow][5] && !board[homeRow][6]
+        && !isSquareAttacked(board, homeRow, 5, enemy) && !isSquareAttacked(board, homeRow, 6, enemy)) moves.push([homeRow, 6]);
+      if (r === homeRow && c === 4 && queenSideRight && !board[homeRow][1] && !board[homeRow][2] && !board[homeRow][3]
+        && !isSquareAttacked(board, homeRow, 3, enemy) && !isSquareAttacked(board, homeRow, 2, enemy)) moves.push([homeRow, 2]);
     }
   }
 
@@ -246,16 +311,120 @@ function updateGameEndState() {
   } else {
     state.result = 'Пат. Ничья.';
   }
+  stopClock();
 }
 
-function makeMove(board, from, to) {
+function makeMove(board, from, to, { promotion, enPassantTarget = state.enPassantTarget } = {}) {
   const next = cloneBoard(board);
   const piece = next[from[0]][from[1]];
+  const lower = piece?.toLowerCase();
+  const isEnPassant = lower === 'p' && enPassantTarget && sameSquare(to, enPassantTarget) && !next[to[0]][to[1]] && from[1] !== to[1];
+  const isCastling = lower === 'k' && Math.abs(to[1] - from[1]) === 2;
+
   next[to[0]][to[1]] = piece;
   next[from[0]][from[1]] = null;
-  if (piece === 'P' && to[0] === 0) next[to[0]][to[1]] = 'Q';
-  if (piece === 'p' && to[0] === 7) next[to[0]][to[1]] = 'q';
+
+  if (isEnPassant) next[from[0]][to[1]] = null;
+  if (isCastling) {
+    const rookFrom = to[1] === 6 ? 7 : 0;
+    const rookTo = to[1] === 6 ? 5 : 3;
+    next[to[0]][rookTo] = next[to[0]][rookFrom];
+    next[to[0]][rookFrom] = null;
+  }
+
+  if (piece === 'P' && to[0] === 0) next[to[0]][to[1]] = promotion ?? 'Q';
+  if (piece === 'p' && to[0] === 7) next[to[0]][to[1]] = promotion?.toLowerCase() ?? 'q';
   return next;
+}
+
+function updateCastlingRights(piece, from, to) {
+  if (piece === 'K') {
+    state.castlingRights.whiteKingSide = false;
+    state.castlingRights.whiteQueenSide = false;
+  }
+  if (piece === 'k') {
+    state.castlingRights.blackKingSide = false;
+    state.castlingRights.blackQueenSide = false;
+  }
+  if (piece === 'R' && from[0] === 7 && from[1] === 0) state.castlingRights.whiteQueenSide = false;
+  if (piece === 'R' && from[0] === 7 && from[1] === 7) state.castlingRights.whiteKingSide = false;
+  if (piece === 'r' && from[0] === 0 && from[1] === 0) state.castlingRights.blackQueenSide = false;
+  if (piece === 'r' && from[0] === 0 && from[1] === 7) state.castlingRights.blackKingSide = false;
+  if (to[0] === 7 && to[1] === 0) state.castlingRights.whiteQueenSide = false;
+  if (to[0] === 7 && to[1] === 7) state.castlingRights.whiteKingSide = false;
+  if (to[0] === 0 && to[1] === 0) state.castlingRights.blackQueenSide = false;
+  if (to[0] === 0 && to[1] === 7) state.castlingRights.blackKingSide = false;
+}
+
+function choosePromotion(piece) {
+  if (!piece || !['P', 'p'].includes(piece)) return null;
+  const targetRank = piece === 'P' ? 0 : 7;
+  const promotion = window.prompt('Во что превратить пешку? Q — ферзь, R — ладья, B — слон, N — конь', 'Q')?.trim().toUpperCase();
+  if (!['Q', 'R', 'B', 'N'].includes(promotion)) return piece === 'P' ? 'Q' : 'q';
+  return piece === 'P' ? promotion : promotion.toLowerCase();
+}
+
+function applyMove(from, to, { bot = false } = {}) {
+  const movingPiece = state.board[from[0]][from[1]];
+  const capturedPiece = state.board[to[0]][to[1]];
+  const promotion = (!bot && movingPiece?.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) ? choosePromotion(movingPiece) : undefined;
+  const isEnPassant = movingPiece?.toLowerCase() === 'p' && state.enPassantTarget && sameSquare(to, state.enPassantTarget) && !capturedPiece && from[1] !== to[1];
+  const isCastling = movingPiece?.toLowerCase() === 'k' && Math.abs(to[1] - from[1]) === 2;
+
+  state.board = makeMove(state.board, from, to, { promotion });
+  updateCastlingRights(movingPiece, from, to);
+  state.enPassantTarget = movingPiece?.toLowerCase() === 'p' && Math.abs(to[0] - from[0]) === 2 ? [(from[0] + to[0]) / 2, from[1]] : null;
+  state.lastMove = { from, to };
+  state.clock[colorOf(movingPiece)] += state.increment;
+
+  const special = isCastling ? ' рокировка' : isEnPassant ? ' e.p.' : promotion ? `=${promotion.toUpperCase()}` : '';
+  state.history = [`${pieces[movingPiece]} ${squareName(from[0], from[1])} → ${squareName(to[0], to[1])}${special}`, ...state.history].slice(0, 12);
+  state.turn = opposite(state.turn);
+  state.selected = null;
+  updateGameEndState();
+  if (!bot) playSound((capturedPiece || isEnPassant) ? 'capture' : 'move');
+}
+
+
+function boardToFen() {
+  const placement = state.board.map((row) => {
+    let empty = 0;
+    let fenRow = '';
+    row.forEach((piece) => {
+      if (!piece) {
+        empty += 1;
+        return;
+      }
+      if (empty) {
+        fenRow += empty;
+        empty = 0;
+      }
+      fenRow += piece;
+    });
+    return fenRow + (empty || '');
+  }).join('/');
+  const castling = [
+    state.castlingRights.whiteKingSide && 'K',
+    state.castlingRights.whiteQueenSide && 'Q',
+    state.castlingRights.blackKingSide && 'k',
+    state.castlingRights.blackQueenSide && 'q',
+  ].filter(Boolean).join('') || '-';
+  const enPassant = state.enPassantTarget ? squareName(state.enPassantTarget[0], state.enPassantTarget[1]) : '-';
+  return `${placement} ${state.turn[0]} ${castling} ${enPassant} 0 1`;
+}
+
+function historyToPgn() {
+  const moves = [...state.history].reverse().filter((move) => !move.includes('партия'));
+  const pairs = [];
+  for (let index = 0; index < moves.length; index += 2) {
+    pairs.push(`${Math.floor(index / 2) + 1}. ${moves[index] ?? ''} ${moves[index + 1] ?? ''}`.trim());
+  }
+  return pairs.join(' ') || '*';
+}
+
+function copyText(text, label) {
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text);
+  reportStatusEl.textContent = `${label} скопирован: ${text}`;
 }
 
 function evaluate(board) {
@@ -279,14 +448,7 @@ function handleSquareClick(r, c) {
   const legalTarget = legalMoves.some(([mr, mc]) => mr === r && mc === c);
 
   if (state.selected && legalTarget) {
-    const movingPiece = state.board[state.selected[0]][state.selected[1]];
-    const capturedPiece = state.board[r][c];
-    state.board = makeMove(state.board, state.selected, [r, c]);
-    state.history = [`${pieces[movingPiece]} ${squareName(state.selected[0], state.selected[1])} → ${squareName(r, c)}`, ...state.history].slice(0, 8);
-    state.turn = state.turn === 'white' ? 'black' : 'white';
-    state.selected = null;
-    updateGameEndState();
-    playSound(capturedPiece ? 'capture' : 'move');
+    applyMove(state.selected, [r, c]);
     render();
     queueBotMoveIfNeeded();
     return;
@@ -305,8 +467,10 @@ function renderBoard() {
     row.forEach((piece, c) => {
       const button = document.createElement('button');
       const legal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
+      const last = sameSquare(state.lastMove?.from, [r, c]) || sameSquare(state.lastMove?.to, [r, c]);
+      const kingInCheck = piece?.toLowerCase() === 'k' && isKingInCheck(state.board, colorOf(piece));
       button.type = 'button';
-      button.className = `square ${(r + c) % 2 ? 'dark' : 'light'} ${isSameSquare(state.selected, [r, c]) ? 'selected' : ''} ${legal ? 'legal' : ''}`;
+      button.className = `square ${(r + c) % 2 ? 'dark' : 'light'} ${isSameSquare(state.selected, [r, c]) ? 'selected' : ''} ${legal ? 'legal' : ''} ${last ? 'last-move' : ''} ${kingInCheck ? 'in-check' : ''}`;
       button.setAttribute('aria-label', `${squareName(r, c)} ${piece ? pieces[piece] : 'empty'}`);
       button.addEventListener('click', () => handleSquareClick(r, c));
 
@@ -315,6 +479,18 @@ function renderBoard() {
       pieceEl.textContent = piece ? pieces[piece] : '';
       button.append(pieceEl);
       if (legal) button.append(document.createElement('i'));
+      if (r === 7) {
+        const fileLabel = document.createElement('em');
+        fileLabel.className = 'coord file';
+        fileLabel.textContent = files[c];
+        button.append(fileLabel);
+      }
+      if (c === 0) {
+        const rankLabel = document.createElement('em');
+        rankLabel.className = 'coord rank';
+        rankLabel.textContent = 8 - r;
+        button.append(rankLabel);
+      }
       boardEl.append(button);
     });
   });
@@ -383,11 +559,19 @@ function renderOnlineStatus() {
   onlineStatusEl.className = 'online-status';
 }
 
+function renderTimers() {
+  whiteClockEl.textContent = formatClock(state.clock.white);
+  blackClockEl.textContent = formatClock(state.clock.black);
+  whiteClockEl.className = state.turn === 'white' && !state.gameOver ? 'active-clock' : '';
+  blackClockEl.className = state.turn === 'black' && !state.gameOver ? 'active-clock' : '';
+}
+
 function render() {
   renderBoard();
   renderMoves();
   renderCoach();
   renderOnlineStatus();
+  renderTimers();
 }
 
 function resetBoardForNewGame() {
@@ -396,6 +580,10 @@ function resetBoardForNewGame() {
   state.selected = null;
   state.history = [];
   state.botThinking = false;
+  state.lastMove = null;
+  state.enPassantTarget = null;
+  state.castlingRights = defaultCastlingRights();
+  state.clock = { white: 300, black: 300 };
   state.gameOver = false;
   state.result = '';
   reportStatusEl.textContent = 'Нет активных жалоб';
@@ -408,6 +596,7 @@ function startOnlineGame() {
   state.gameId += 1;
   state.onlineStatus = 'searching';
   state.mode = 'online';
+  lastStartMode = 'online';
   state.opponent = 'поиск…';
   playSound('move');
   render();
@@ -418,6 +607,7 @@ function startOnlineGame() {
     state.opponent = demoOpponents[opponentIndex];
     state.history = [`Онлайн партия #${state.gameId} началась против ${state.opponent}`];
     playSound('start');
+    startClock();
     render();
   }, 700);
 }
@@ -448,14 +638,10 @@ function queueBotMoveIfNeeded() {
       return;
     }
 
-    const movingPiece = state.board[botMove.from[0]][botMove.from[1]];
-    const capturedPiece = state.board[botMove.to[0]][botMove.to[1]];
-    state.board = makeMove(state.board, botMove.from, botMove.to);
-    state.history = [`${state.opponent}: ${pieces[movingPiece]} ${squareName(botMove.from[0], botMove.from[1])} → ${squareName(botMove.to[0], botMove.to[1])}`, ...state.history].slice(0, 8);
-    state.turn = 'white';
+    applyMove(botMove.from, botMove.to, { bot: true });
+    state.history[0] = `${state.opponent}: ${state.history[0]}`;
     state.botThinking = false;
-    updateGameEndState();
-    playSound(capturedPiece ? 'capture' : 'bot');
+    playSound(botMove.capture ? 'capture' : 'bot');
     render();
   }, 650);
 }
@@ -466,16 +652,42 @@ function startBotGame() {
   resetBoardForNewGame();
   state.gameId += 1;
   state.mode = 'bot';
+  lastStartMode = 'bot';
   state.onlineStatus = 'connected';
   state.opponent = botProfiles[state.gameId % botProfiles.length];
   state.history = [`Офлайн партия #${state.gameId} началась против ${state.opponent}`];
   playSound('start');
   updateGameEndState();
+  startClock();
   render();
 }
 
 newOnlineGameButton.addEventListener('click', startOnlineGame);
 newBotGameButton.addEventListener('click', startBotGame);
+resignGameButton.addEventListener('click', () => {
+  if (state.gameOver) return;
+  state.gameOver = true;
+  state.result = `${state.turn === 'white' ? 'Белые' : 'Черные'} сдались. Победили ${state.turn === 'white' ? 'черные' : 'белые'}.`;
+  stopClock();
+  render();
+});
+
+drawGameButton.addEventListener('click', () => {
+  if (state.gameOver) return;
+  state.gameOver = true;
+  state.result = 'Ничья по соглашению.';
+  stopClock();
+  render();
+});
+
+rematchGameButton.addEventListener('click', () => {
+  if (lastStartMode === 'online') startOnlineGame();
+  else startBotGame();
+});
+
+copyPgnButton.addEventListener('click', () => copyText(historyToPgn(), 'PGN'));
+copyFenButton.addEventListener('click', () => copyText(boardToFen(), 'FEN'));
+
 toggleSoundButton.addEventListener('click', () => {
   state.soundEnabled = !state.soundEnabled;
   if (state.soundEnabled) playSound('move');

@@ -54,3 +54,13 @@ button, .hero-actions a { border: 0; border-radius: 999px; background: #74f6c7; 
 .player-row strong { color: #fff; }
 button:disabled { cursor: wait; opacity: .7; }
 .hero-actions .secondary { background: rgba(116,246,199,.12); color: #74f6c7; border: 1px solid rgba(116,246,199,.3); }
+
+.square.last-move { box-shadow: inset 0 0 0 999px rgba(116, 246, 199, .20); }
+.square.in-check { box-shadow: inset 0 0 0 999px rgba(255, 80, 80, .35); }
+.coord { position: absolute; z-index: 2; font-size: .7rem; font-style: normal; font-weight: 900; color: rgba(7,16,24,.65); pointer-events: none; }
+.coord.file { right: 6px; bottom: 4px; }
+.coord.rank { left: 6px; top: 4px; }
+.clock-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-top: 1px solid rgba(255,255,255,.1); color: #c7d2e4; }
+.clock-row strong { color: #fff; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
+.active-clock { color: #74f6c7 !important; text-shadow: 0 0 18px rgba(116,246,199,.45); }
+.game-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
