@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="MVP онлайн-шахмат: честная игра, персональный тренер, клубы и быстрый матчмейкинг." />
+    <title>Chess Prime — честные онлайн-шахматы</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">Chess Prime MVP</p>
+          <h1>Онлайн-шахматы с честной игрой, обучением и клубами</h1>
+          <p class="lead">Первый рабочий прототип превращает стратегию в продукт: доска с легальными ходами, история партии, тренерские подсказки, fair play workflow и план развития комьюнити.</p>
+          <div class="hero-actions">
+            <button id="new-online-game" type="button">Найти онлайн соперника</button>
+            <button id="new-bot-game" class="secondary" type="button">Играть с ботом офлайн</button>
+            <button id="toggle-sound" class="secondary" type="button">Звук: вкл</button>
+            <a href="#roadmap">Открыть стратегию</a>
+          </div>
+        </div>
+        <div class="stats" aria-label="Целевые метрики">
+          <span><strong>&lt;5 сек</strong> цель матчмейкинга</span>
+          <span><strong>92%+</strong> completion rate</span>
+          <span><strong>Fair play</strong> статусы жалоб</span>
+        </div>
+      </section>
+
+      <section class="game-layout">
+        <div id="board" class="board" aria-label="Шахматная доска"></div>
+        <aside class="side-panel">
+          <section class="card online-card">
+            <div class="section-eyebrow">Online / Offline</div>
+            <h2>Матчмейкинг и боты</h2>
+            <p id="online-status" class="online-status">Выберите онлайн-поиск или офлайн-бота, чтобы начать новую партию.</p>
+            <div class="player-row"><span>Вы</span><strong>Guest_1200</strong></div>
+            <div class="player-row"><span>Соперник</span><strong id="opponent-name">ожидает выбора</strong></div>
+          </section>
+          <section class="card clock-card">
+            <div class="section-eyebrow">Clock & Actions</div>
+            <h2>Партия</h2>
+            <div class="clock-row"><span>Белые</span><strong id="white-clock">05:00</strong></div>
+            <div class="clock-row"><span>Черные</span><strong id="black-clock">05:00</strong></div>
+            <div class="game-actions">
+              <button id="resign-game" class="secondary" type="button">Сдаться</button>
+              <button id="draw-game" class="secondary" type="button">Ничья</button>
+              <button id="rematch-game" class="secondary" type="button">Реванш</button>
+              <button id="copy-pgn" class="secondary" type="button">PGN</button>
+              <button id="copy-fen" class="secondary" type="button">FEN</button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="section-eyebrow">Live Game</div>
+            <h2>История ходов</h2>
+            <ol id="moves" class="moves"><li>Сделайте первый ход</li></ol>
+          </section>
+          <section class="card coach">
+            <div class="section-eyebrow">AI Coach</div>
+            <h2>Персональный тренер после партии</h2>
+            <p id="coach-advice">Позиция примерно равная: улучшайте худшую фигуру и контролируйте центр.</p>
+            <ul>
+              <li>Материальная оценка: <strong id="score">0</strong></li>
+              <li>Последний ход: <strong id="last-move">пока нет</strong></li>
+              <li>Тренировка: решите 3 позиции на висячие фигуры и матовые угрозы.</li>
+            </ul>
+          </section>
+        </aside>
+      </section>
+
+      <section id="roadmap" class="roadmap card">
+        <div class="section-eyebrow">Roadmap</div>
+        <h2>План реализации из стратегии</h2>
+        <ol>
+          <li><strong>Игровое ядро:</strong> real-time партии, часы, рейтинг, история и PGN.</li>
+          <li><strong>Доверие:</strong> жалобы, античит-телеметрия, reconnect и компенсация рейтинга.</li>
+          <li><strong>Обучение:</strong> Stockfish review, персональные пазлы и дебютный explorer.</li>
+          <li><strong>Комьюнити:</strong> клубы, арены, командные матчи и совместный анализ.</li>
+        </ol>
+      </section>
+
+      <section class="feature-grid">
+        <article class="card">
+          <div class="section-eyebrow">Fair Play</div>
+          <h2>Прозрачная жалоба</h2>
+          <p>Показываем статус обращения без раскрытия античит-сигналов.</p>
+          <button id="report-game" class="secondary" type="button">Пожаловаться на партию</button>
+          <p id="report-status" class="status">Нет активных жалоб</p>
+        </article>
+        <article class="card">
+          <div class="section-eyebrow">Matchmaking</div>
+          <h2>Умная очередь</h2>
+          <p>Будущая очередь учитывает рейтинг, стабильность сети, уровень доверия и режим verified ranked.</p>
+        </article>
+        <article class="card">
+          <div class="section-eyebrow">Community</div>
+          <h2>Клубы и лиги</h2>
+          <p>Сезоны, дивизионы, командные матчи, совместный разбор и инструменты капитана.</p>
+        </article>
+        <article class="card">
+          <div class="section-eyebrow">Beginner UX</div>
+          <h2>Мягкий старт</h2>
+          <p>Подсказки без рейтинга, анти-tilt режим, безопасный чат и детский профиль.</p>
+        </article>
+      </section>
+    </main>
+    <script defer src="./src/main.js"></script>
+  </body>
+</html>
