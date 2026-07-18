@@ -17,6 +17,11 @@
           <div class="hero-actions">
             <button id="new-online-game" type="button">Найти онлайн соперника</button>
             <button id="new-bot-game" class="secondary" type="button">Играть с ботом офлайн</button>
+            <select id="bot-level" class="select-control" aria-label="Уровень бота">
+              <option value="beginner">Bot 400</option>
+              <option value="club" selected>Bot 900</option>
+              <option value="strong">Bot 1400</option>
+            </select>
             <button id="toggle-sound" class="secondary" type="button">Звук: вкл</button>
             <a href="#roadmap">Открыть стратегию</a>
           </div>
@@ -50,6 +55,8 @@
               <button id="copy-pgn" class="secondary" type="button">PGN</button>
               <button id="copy-fen" class="secondary" type="button">FEN</button>
             </div>
+            <textarea id="fen-input" class="fen-input" rows="2" placeholder="Вставьте FEN для загрузки позиции"></textarea>
+            <button id="load-fen" class="secondary wide" type="button">Загрузить FEN</button>
           </section>
           <section class="card">
             <div class="section-eyebrow">Live Game</div>
@@ -105,6 +112,8 @@
         </article>
       </section>
     </main>
+    <div id="promotion-modal" class="modal hidden" aria-live="polite"></div>
+    <div id="end-modal" class="modal hidden" aria-live="polite"></div>
     <script defer src="./src/main.js"></script>
   </body>
 </html>

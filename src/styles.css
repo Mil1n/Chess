@@ -64,3 +64,13 @@ button:disabled { cursor: wait; opacity: .7; }
 .clock-row strong { color: #fff; font-size: 1.35rem; font-variant-numeric: tabular-nums; }
 .active-clock { color: #74f6c7 !important; text-shadow: 0 0 18px rgba(116,246,199,.45); }
 .game-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.select-control, .fen-input { border: 1px solid rgba(255,255,255,.16); border-radius: 16px; background: rgba(255,255,255,.08); color: #fff; padding: 11px 14px; font: inherit; }
+.fen-input { width: 100%; margin-top: 14px; resize: vertical; min-height: 64px; }
+.wide { width: 100%; margin-top: 10px; }
+.modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 20px; background: rgba(3, 7, 18, .62); backdrop-filter: blur(8px); }
+.modal.hidden { display: none; }
+.modal-card { width: min(460px, 100%); border: 1px solid rgba(255,255,255,.16); border-radius: 28px; padding: 24px; background: #101826; box-shadow: 0 28px 80px rgba(0,0,0,.52); }
+.modal-card h2 { margin-bottom: 14px; }
+.modal-card li { color: #c7d2e4; margin: 8px 0; }
+.promotion-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.promotion-row button { border-radius: 22px; min-height: 86px; font-size: 3rem; background: rgba(116,246,199,.12); color: #fff; border: 1px solid rgba(116,246,199,.28); }

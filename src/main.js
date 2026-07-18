@@ -33,6 +33,8 @@ const state = {
   castlingRights: { whiteKingSide: true, whiteQueenSide: true, blackKingSide: true, blackQueenSide: true },
   clock: { white: 300, black: 300 },
   increment: 2,
+  pendingPromotion: null,
+  botLevel: 'club',
 };
 
 const boardEl = document.querySelector('#board');
@@ -53,8 +55,13 @@ const drawGameButton = document.querySelector('#draw-game');
 const rematchGameButton = document.querySelector('#rematch-game');
 const copyPgnButton = document.querySelector('#copy-pgn');
 const copyFenButton = document.querySelector('#copy-fen');
+const fenInputEl = document.querySelector('#fen-input');
+const loadFenButton = document.querySelector('#load-fen');
+const botLevelSelect = document.querySelector('#bot-level');
+const promotionModalEl = document.querySelector('#promotion-modal');
+const endModalEl = document.querySelector('#end-modal');
 const demoOpponents = ['Mila_1540', 'KnightFox', 'TacticNinja', 'ClubPlayer_1280'];
-const botProfiles = ['Bot Nova 900', 'Bot Tactic 1200', 'Bot Aurora 1500'];
+const botProfiles = { beginner: 'Bot Pawn 400', club: 'Bot Nova 900', strong: 'Bot Aurora 1400' };
 let matchmakingTimer = null;
 let botTimer = null;
 let audioContext = null;
@@ -356,28 +363,24 @@ function updateCastlingRights(piece, from, to) {
   if (to[0] === 0 && to[1] === 7) state.castlingRights.blackKingSide = false;
 }
 
-function choosePromotion(piece) {
-  if (!piece || !['P', 'p'].includes(piece)) return null;
-  const targetRank = piece === 'P' ? 0 : 7;
-  const promotion = window.prompt('Во что превратить пешку? Q — ферзь, R — ладья, B — слон, N — конь', 'Q')?.trim().toUpperCase();
-  if (!['Q', 'R', 'B', 'N'].includes(promotion)) return piece === 'P' ? 'Q' : 'q';
-  return piece === 'P' ? promotion : promotion.toLowerCase();
+function needsPromotion(piece, to) {
+  return piece?.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7);
 }
 
-function applyMove(from, to, { bot = false } = {}) {
+function applyMove(from, to, { bot = false, promotion } = {}) {
   const movingPiece = state.board[from[0]][from[1]];
   const capturedPiece = state.board[to[0]][to[1]];
-  const promotion = (!bot && movingPiece?.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) ? choosePromotion(movingPiece) : undefined;
+  const finalPromotion = promotion ?? (bot && needsPromotion(movingPiece, to) ? (isWhite(movingPiece) ? 'Q' : 'q') : undefined);
   const isEnPassant = movingPiece?.toLowerCase() === 'p' && state.enPassantTarget && sameSquare(to, state.enPassantTarget) && !capturedPiece && from[1] !== to[1];
   const isCastling = movingPiece?.toLowerCase() === 'k' && Math.abs(to[1] - from[1]) === 2;
 
-  state.board = makeMove(state.board, from, to, { promotion });
+  state.board = makeMove(state.board, from, to, { promotion: finalPromotion });
   updateCastlingRights(movingPiece, from, to);
   state.enPassantTarget = movingPiece?.toLowerCase() === 'p' && Math.abs(to[0] - from[0]) === 2 ? [(from[0] + to[0]) / 2, from[1]] : null;
   state.lastMove = { from, to };
   state.clock[colorOf(movingPiece)] += state.increment;
 
-  const special = isCastling ? ' рокировка' : isEnPassant ? ' e.p.' : promotion ? `=${promotion.toUpperCase()}` : '';
+  const special = isCastling ? ' рокировка' : isEnPassant ? ' e.p.' : finalPromotion ? `=${finalPromotion.toUpperCase()}` : (capturedPiece ? ' взятие' : '');
   state.history = [`${pieces[movingPiece]} ${squareName(from[0], from[1])} → ${squareName(to[0], to[1])}${special}`, ...state.history].slice(0, 12);
   state.turn = opposite(state.turn);
   state.selected = null;
@@ -427,6 +430,38 @@ function copyText(text, label) {
   reportStatusEl.textContent = `${label} скопирован: ${text}`;
 }
 
+
+function loadFen(fen) {
+  const parts = fen.trim().split(/\s+/);
+  if (parts.length < 4) throw new Error('FEN должен содержать позицию, сторону хода, рокировку и en passant');
+  const rows = parts[0].split('/');
+  if (rows.length !== 8) throw new Error('В FEN должно быть 8 рядов');
+  const board = rows.map((row) => {
+    const cells = [];
+    row.split('').forEach((char) => {
+      if (/\d/.test(char)) cells.push(...Array(Number(char)).fill(null));
+      else if ('prnbqkPRNBQK'.includes(char)) cells.push(char);
+      else throw new Error(`Недопустимый символ FEN: ${char}`);
+    });
+    if (cells.length !== 8) throw new Error('Каждый ряд FEN должен содержать 8 клеток');
+    return cells;
+  });
+  state.board = board;
+  state.turn = parts[1] === 'b' ? 'black' : 'white';
+  state.castlingRights = {
+    whiteKingSide: parts[2].includes('K'),
+    whiteQueenSide: parts[2].includes('Q'),
+    blackKingSide: parts[2].includes('k'),
+    blackQueenSide: parts[2].includes('q'),
+  };
+  state.enPassantTarget = parts[3] === '-' ? null : [8 - Number(parts[3][1]), files.indexOf(parts[3][0])];
+  state.history = [`FEN загружен: ${parts[0]}`];
+  state.lastMove = null;
+  state.gameOver = false;
+  state.result = '';
+  updateGameEndState();
+}
+
 function evaluate(board) {
   const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
   return board.flat().reduce((score, piece) => {
@@ -448,6 +483,12 @@ function handleSquareClick(r, c) {
   const legalTarget = legalMoves.some(([mr, mc]) => mr === r && mc === c);
 
   if (state.selected && legalTarget) {
+    if (needsPromotion(state.board[state.selected[0]][state.selected[1]], [r, c])) {
+      state.pendingPromotion = { from: state.selected, to: [r, c], piece: state.board[state.selected[0]][state.selected[1]] };
+      state.selected = null;
+      render();
+      return;
+    }
     applyMove(state.selected, [r, c]);
     render();
     queueBotMoveIfNeeded();
@@ -566,12 +607,83 @@ function renderTimers() {
   blackClockEl.className = state.turn === 'black' && !state.gameOver ? 'active-clock' : '';
 }
 
+
+function renderPromotionModal() {
+  promotionModalEl.replaceChildren();
+  promotionModalEl.className = state.pendingPromotion ? 'modal' : 'modal hidden';
+  if (!state.pendingPromotion) return;
+
+  const card = document.createElement('section');
+  card.className = 'modal-card';
+  const title = document.createElement('h2');
+  title.textContent = 'Выберите фигуру для превращения';
+  card.append(title);
+  const choices = isWhite(state.pendingPromotion.piece)
+    ? [['Q', '♕'], ['R', '♖'], ['B', '♗'], ['N', '♘']]
+    : [['q', '♛'], ['r', '♜'], ['b', '♝'], ['n', '♞']];
+  const row = document.createElement('div');
+  row.className = 'promotion-row';
+  choices.forEach(([piece, icon]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = icon;
+    button.addEventListener('click', () => {
+      const { from, to } = state.pendingPromotion;
+      state.pendingPromotion = null;
+      applyMove(from, to, { promotion: piece });
+      render();
+      queueBotMoveIfNeeded();
+    });
+    row.append(button);
+  });
+  card.append(row);
+  promotionModalEl.append(card);
+}
+
+function gameSummary() {
+  const moves = state.history.filter((move) => !move.includes('партия'));
+  const captures = moves.filter((move) => move.includes('взятие') || move.includes('e.p.')).length;
+  return [`Ходов в истории: ${moves.length}`, `Материал: ${evaluate(state.board)}`, `Взятий/спецходов: ${captures}`];
+}
+
+function renderEndModal() {
+  endModalEl.replaceChildren();
+  endModalEl.className = state.gameOver ? 'modal' : 'modal hidden';
+  if (!state.gameOver) return;
+
+  const card = document.createElement('section');
+  card.className = 'modal-card';
+  const title = document.createElement('h2');
+  title.textContent = state.result;
+  card.append(title);
+  const list = document.createElement('ul');
+  gameSummary().forEach((item) => {
+    const li = document.createElement('li');
+    li.textContent = item;
+    list.append(li);
+  });
+  card.append(list);
+  const actions = document.createElement('div');
+  actions.className = 'game-actions';
+  [['Реванш', () => rematchGameButton.click()], ['PGN', () => copyPgnButton.click()], ['FEN', () => copyFenButton.click()]].forEach(([label, action]) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = label;
+    button.addEventListener('click', action);
+    actions.append(button);
+  });
+  card.append(actions);
+  endModalEl.append(card);
+}
+
 function render() {
   renderBoard();
   renderMoves();
   renderCoach();
   renderOnlineStatus();
   renderTimers();
+  renderPromotionModal();
+  renderEndModal();
 }
 
 function resetBoardForNewGame() {
@@ -586,6 +698,7 @@ function resetBoardForNewGame() {
   state.clock = { white: 300, black: 300 };
   state.gameOver = false;
   state.result = '';
+  state.pendingPromotion = null;
   reportStatusEl.textContent = 'Нет активных жалоб';
 }
 
@@ -612,12 +725,27 @@ function startOnlineGame() {
   }, 700);
 }
 
+function scoreBotMove(move) {
+  const target = state.board[move.to[0]][move.to[1]];
+  const values = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+  let score = target ? values[target.toLowerCase()] * 10 : 0;
+  const next = makeMove(state.board, move.from, move.to);
+  if (isKingInCheck(next, 'white')) score += 6;
+  if (needsPromotion(state.board[move.from[0]][move.from[1]], move.to)) score += 18;
+  return score + Math.random();
+}
+
 function chooseBotMove() {
   const moves = collectLegalMovesForColor(state.board, 'black');
   if (!moves.length) return null;
-  const captures = moves.filter((move) => move.capture);
-  const pool = captures.length ? captures : moves;
-  return pool[Math.floor(Math.random() * pool.length)];
+  if (state.botLevel === 'beginner') return moves[Math.floor(Math.random() * moves.length)];
+
+  const ranked = moves.map((move) => ({ move, score: scoreBotMove(move) })).sort((a, b) => b.score - a.score);
+  if (state.botLevel === 'club') {
+    const pool = ranked.slice(0, Math.min(4, ranked.length));
+    return pool[Math.floor(Math.random() * pool.length)].move;
+  }
+  return ranked[0].move;
 }
 
 function queueBotMoveIfNeeded() {
@@ -654,7 +782,8 @@ function startBotGame() {
   state.mode = 'bot';
   lastStartMode = 'bot';
   state.onlineStatus = 'connected';
-  state.opponent = botProfiles[state.gameId % botProfiles.length];
+  state.botLevel = botLevelSelect.value;
+  state.opponent = botProfiles[state.botLevel];
   state.history = [`Офлайн партия #${state.gameId} началась против ${state.opponent}`];
   playSound('start');
   updateGameEndState();
@@ -687,6 +816,16 @@ rematchGameButton.addEventListener('click', () => {
 
 copyPgnButton.addEventListener('click', () => copyText(historyToPgn(), 'PGN'));
 copyFenButton.addEventListener('click', () => copyText(boardToFen(), 'FEN'));
+loadFenButton.addEventListener('click', () => {
+  try {
+    loadFen(fenInputEl.value);
+    reportStatusEl.textContent = 'FEN загружен';
+    render();
+  } catch (error) {
+    reportStatusEl.textContent = error.message;
+  }
+});
+botLevelSelect.addEventListener('change', () => { state.botLevel = botLevelSelect.value; });
 
 toggleSoundButton.addEventListener('click', () => {
   state.soundEnabled = !state.soundEnabled;
